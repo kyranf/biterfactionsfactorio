@@ -6,7 +6,7 @@
 ## Description  
 Turns the once peaceful biters into different factions, warring for domination over Nauvis alongside the player. They will fight amongst themselves for land.
 
-Mod portal link here: [Mod Portal]( https://mods.factorio.com/mod/biterfactions/ )
+Mod portal link here: [Mod Portal]( https://mods.factorio.com/mod/biter_factions)
 
 ## Credits
 Random dude on Facebook for the inspiration.

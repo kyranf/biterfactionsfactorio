@@ -10,6 +10,8 @@ local evoPeriodModifier = 0.5  -- adjustment to attack wave period/frequency, ba
 local evoChanceModifier = 0.1  -- additional chance based on evolution percent.  current evo % * modifier = additional chance to send attack.
 local periodDither = 600 --random amount to dither each faction's next attack by, so they don't all line up on the same tick.
 
+local debugMode = 0
+
 function initHandler(event)
 
     global.factionList = global.factionList or  {}
@@ -31,7 +33,7 @@ function createForces()
                 global.factionList[i] = game.create_force("biter_faction_"..i)
                 global.nests[i] = {}
                 local forcecreated = global.factionList[i] 
-                game.print("created biter faction: "..forcecreated.name)
+                if debugMode then game.print("created biter faction: "..forcecreated.name) end
                 forcecreated.ai_controllable = true
                 forcecreated.evolution_factor = game.forces["enemy"].evolution_factor
                 forcecreated.evolution_factor_by_pollution  = game.forces["enemy"].evolution_factor_by_pollution 
@@ -80,7 +82,7 @@ function chunkGenHandler(event)
             if entity.name == "biter-spawner" or entity.name == "spitter-spawner" then 
                 if not global.nests[i] then global.nests[i] = {} end
                 global.nests[i][entity.unit_number] = entity --store the entity by its unit number in the force's list.
-                game.print("Faction "..factionIndex.." has ".. table_size(global.nests[i]).." nests!")
+                if debugMode then game.print("Faction "..factionIndex.." has ".. table_size(global.nests[i]).." nests!") end
             end
         end
 
@@ -104,6 +106,7 @@ function runAttackHandler(event)
     for i, force in pairs( global.factionList) do
 
         --compare tick 
+        if not global.nextAttackTick[i] then global.nextAttackTick[i] = event.tick end
         if event.tick >= global.nextAttackTick[i] then
             
             -- calculate chance of attack this time around
@@ -117,52 +120,107 @@ function runAttackHandler(event)
             local shouldAttack = math.random() <= (attackWaveChance + evoChanceAdj)  -- random % value computed, if the generated % value is equal or less than the chance to trigger, it triggers. 
             
             if shouldAttack then 
-                game.print("biter faction: "..force.name.." is launching an attack. Beware!")
+                if debugMode then game.print("biter faction: "..force.name.." is launching an attack. Beware!") end
                 --do the attack launch code.
-               
-                for j, nest in pairs(global.nests[i]) do 
-                        if nest.valid then 
-                            --find nearest enemy within 3k tiles.
-                            local enemy = nest.surface.find_nearest_enemy({position= nest.position, max_distance = 3000, force=nest.force})
-                            local keepAttacking = 1
-                            if enemy.force.name == "player" then
-                                keepAttacking = math.random() <= playerAttackChanceReduction --if random returns less than or equal to the chance to avoid attacking if target is player, then call off the attack!
-                            end
+                
+                --ensure there is a list of nests. if there isn't quickly generate one to get started..
+                if not global.nests[i] then 
+                    global.nests[i] = {}
+                    game.print("Bootstrapping faction "..force.name.." to set up nest lists")
+                    local surf = game.surfaces[1]
+                    local nestList = surf.find_entities_filtered{position={0,0}, radius= 15000, force = force.name, type ="unit-spawner"}
+                    
+                    game.print("Found "..#nestList.." nests!")
+                    
+                    for j, nestFound in pairs(nestList) do 
+                        global.nests[i][nestFound.unit_number] = nestFound  --insert the nest to the nests table using its unit_number as the key.
+                    end 
+                    
+                end
 
-                            if keepAttacking then 
-                                --get list of nearby entities of type "unit" to give attack orders.
-                                --alternatively... get the unit's owned directly from the spawner , regardless of position! :) Much more efficient. 
-                                local unitList =  nest.units --nest.surface.find_entities_filtered{area = chunkarea, force = force.name, type ="unit"}
-                                
-                                --give the attack command!
-                                for k, entity in pairs(unitList) do
-                                    entity.set_command({type=defines.command.attack_area, destination=enemy.position, radius=32, distraction=defines.distraction.by_anything}) 
-                                end
-                            end
-                            
-                        else
-                            nest = nil --wipe out this entry, it's dead/invalid now.
-                        end
-                end 
-            end
+                --check and init tables as needed, to schedule an attack for this faction. 
+                if not global.scheduledAttack then global.scheduledAttack = {} end
+                global.scheduledAttack[i] = 1 --set this faction's index to start an attack. 
 
+                if not global.attackProgress then global.attackProgress = {} end
+                global.attackProgress[i] = 0  --set this faction's attack progress to 0, so it can be incremented in the proceeding ticks. 
+
+            end --if should attack trigger
+
+            
 
             --now calculate when this faction should check for another attack.
             local evoPeriodAdj = force.evolution_factor * evoPeriodModifier
             global.nextAttackTick[i] = event.tick + attackWavePeriod + math.random(periodDither) - evoPeriodAdj
             
-        end 
+        end --end of if next attack tick equal/exceeded
 
-    end
+        --check for if attack is active for this faction, and initate the next wave of attacking nests.
+        if (global.scheduledAttack and global.scheduledAttack[i] == 1) then
+            local progress = 0
+            for key, nest in pairs(global.nests[i]) do 
+                progress = progress + 1
+                if nest.valid and progress == global.attackProgress[i] then 
+                    --find nearest enemy within 3k tiles.
+                    local enemy = nest.surface.find_nearest_enemy({position= nest.position, max_distance = 3000, force=nest.force})
+                    local keepAttacking = 1
+                    if enemy.force.name == "player" then
+                        keepAttacking = math.random() <= playerAttackChanceReduction --if random returns less than or equal to the chance to avoid attacking if target is player, then call off the attack!
+                    end
+
+                    if keepAttacking then 
+                        --get list of nearby entities of type "unit" to give attack orders.
+                        --alternatively... get the unit's owned directly from the spawner , regardless of position! :) Much more efficient. 
+                        local unitList =  nest.units --nest.surface.find_entities_filtered{area = chunkarea, force = force.name, type ="unit"}
+                        
+                        --give the attack command!
+                        for k, entity in pairs(unitList) do
+                            entity.set_command({type=defines.command.attack_area, destination=enemy.position, radius=32, distraction=defines.distraction.by_anything}) 
+                        end
+                    end
+                    
+                else
+                    if not nest.valid then
+                        global.nests[key] = nil --wipe out this entry, it's dead/invalid now.
+                    end
+                    goto nextProgressDone
+                end
+            end
+        
+
+            ::nextProgressDone::
+
+            --increment attack progress counter, and check for table end reached.
+            global.attackProgress[i] = global.attackProgress[i] + 1 
+
+            local maxCount = table_size(global.nests[i])
+            if global.attackProgress[i] >= maxCount then  --if we've ticked up enough nests then we are done.
+                if(debugMode) then game.print("Biter faction "..i.." finished attacking with "..global.attackProgress[i].." nests!") end
+                if(debugMode) then game.print("Biter faction has "..table_size(global.nests[i]).." nests") end
+                global.scheduledAttack[i] = 0
+                global.attackProgress[i] = 0
+            end
+        end
+    end -- end for each faction in faction list.
 
 end
 
 function expansionBaseHandler(event)
 
     local entity = event.entity
-    game.print("Type of newly built expansion entity: "..entity.prototype.type)
+    if debugMode then game.print("Type of newly built expansion entity: "..entity.prototype.type) end
     if entity.prototype.type == "unit-spawner" then
-        game.print("It's a spawner type entity!")
+        if debugMode then game.print("It's a spawner type entity!") end
+        local force = entity.force
+
+        if global.factionList and global.nests then
+            for i, force in pairs(global.factionList) do 
+                if global.nests[i] then 
+                    global.nests[i][entity.unit_number] = entity
+                end
+            end
+        end
+
     end
 
 end

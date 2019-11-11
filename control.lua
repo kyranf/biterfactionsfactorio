@@ -10,7 +10,7 @@ local evoPeriodModifier = 0.5  -- adjustment to attack wave period/frequency, ba
 local evoChanceModifier = 0.1  -- additional chance based on evolution percent.  current evo % * modifier = additional chance to send attack.
 local periodDither = 600 --random amount to dither each faction's next attack by, so they don't all line up on the same tick.
 
-local debugMode = 0
+local debugMode = nil  --make this nil or non-nil, to disable or enable debug mode.
 
 function initHandler(event)
 

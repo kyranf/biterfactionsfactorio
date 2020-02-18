@@ -1,11 +1,11 @@
 {
 	"name": "biter_factions",
-	"version": "0.1.1",
+	"version": "0.1.5",
 	"title": "Biter Factions",
 	
 	"author": "Kyranzor",
 	"contact": "kyranzor@gmail.com",
 	"homepage": "https://github.com/kyranf/biterfactionsfactorio",
 	"description": "Turns the once peaceful biters into different factions, warring for domination over Nauvis alongside the player. They will fight amongst themselves for land.",
-    "factorio_version": "0.17"
+    "factorio_version": "0.18"
 }

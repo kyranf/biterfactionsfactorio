@@ -1,6 +1,6 @@
 # Biter Factions mod
 ## Version  
-0.1.5
+0.1.7
 
 
 ## Description  

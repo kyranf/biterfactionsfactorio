@@ -98,20 +98,35 @@ function getChunkNestsAndAllocate(chunkarea, surface)
     local force = global.factionList[factionIndex ]  --random force index from 1 to factionlist length
     local entitiesList = surface.find_entities_filtered{area = chunkarea, force = "enemy"}
  
-    for i, entity in pairs(entitiesList) do
+    local randVal = 0
+    local destroyed = false
 
+    local cullSetting = settings.global["Culling-Per-Chunk"].value  --read in the settings from global because we are about to use it a lot
+    if debugMode then game.print(string.format("culling setting is %f", cullSetting)) end 
+    if debugMode then game.print(string.format("number of entities in chunk %d", #entitiesList)) end
+    for i, entity in pairs(entitiesList) do
+        randVal = math.random()
+        destroyed = false;
         if entity and entity.valid then
 
             entity.force = force  --change the entity's force. nest, worm, biters should all be affected.
-        
+            if randVal <= cullSetting then
+                if debugMode then  game.print(string.format("culling critter with name %s",entity.name)) end 
+                entity.destroy();
+             
+                destroyed = true;
+            end 
             --if it's a spawner, add to the force's spawner list.
-            if entity.type == "unit-spawner" then 
+            if not destroyed and entity.type == "unit-spawner" then 
                 if not global.nests[i] then global.nests[i] = {} end
                 global.nests[i][entity.unit_number] = entity --store the entity by its unit number in the force's list.
                 if debugMode then game.print("Faction "..factionIndex.." has ".. table_size(global.nests[i]).." nests!") end
-            end
+            end 
+              
+            
 
-            if game.active_mods["Big-Monsters"] and entity.type == "turret" then 
+            --special case for big monsters mod, making ridiculously powerful worms. try to cut them down to 1% health to give a chance to kill them in civil wars.
+            if not destroyed and game.active_mods["Big-Monsters"] and entity.type == "turret" then 
 
                 if string.find(entity.name, "worm") or string.find(entity.name, "Worm") then 
     
@@ -122,9 +137,9 @@ function getChunkNestsAndAllocate(chunkarea, surface)
                     end 
                 end
 
-            end 
+            end --end if special attention for ridiculously powerful worms from "big monsters" mod.
 
-        end
+        end --end if entity is  valid
 
     end
 
